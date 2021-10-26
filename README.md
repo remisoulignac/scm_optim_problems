@@ -7,13 +7,13 @@ Let's put it right away : it does not give the best answer. Indeed, I found it e
 
 Moreover, the score of SCXScream is calculated as if each scenario had the same probability of occurence. Here, with the present solution, we try to find the best solution for a combinaison of random scenarios based on their probability of occurence. 
 
-These limitations put aside, it's was a good interesting optimization problem. However, because SCREAM Simulator is a black box, MILP does not seem to be the best way to find the solution. A better solution could be a Monte Carlo approach which would directly target the REST API (https://scxscream.herokuapp.com/tests/) with various backup parameters and test scenarios.
+These limitations put aside, it's was a interesting optimization problem. However, because SCREAM Simulator is a black box, MILP does not seem to be the best way to find the best solution. A better approach could be using Monte Carlo for generating various backup parameters and test scenarios and using the REST API (https://scxscream.herokuapp.com/tests/) to get the calculated profit and Item Fill Rate.
 
 # Usage
 import and run the notebook into a https://colab.research.google.com/. The calculus may take several hours, depending on the number of scenarios.
 
 # Problem analysis
-The hard problem could be splitted in two questions :  
+The hard problem could be splitted into two questions :  
 1) how do we estimate the risk probability for the various disruptions.
 2) how do  we modelize the supply chain
 
