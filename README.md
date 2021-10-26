@@ -9,7 +9,7 @@ Moreover, the score of SCXScream is calculated as if each scenario had the same 
 
 These limitations put aside, it's was a interesting optimization problem. However, because SCREAM Simulator is a black box, MILP does not seem to be the best way to find the best solution. A better approach could be using Monte Carlo for generating various backup parameters and test scenarios and using the REST API (https://scxscream.herokuapp.com/tests/) to get the calculated profit and Item Fill Rate.
 
-This work is losely inspired by https://github.com/JorgeGarciaCastillo/SCREAM/. It is a similar attempt done a few years ago. It is based on java and the IBM CPLEX opimization engine. 
+This work was inspired by https://github.com/JorgeGarciaCastillo/SCREAM/. It is a similar attempt done a few years ago. It is based on java and the IBM CPLEX opimization engine. 
 
 # Usage
 import and run the notebook into a https://colab.research.google.com/. The calculus may take several hours, depending on the number of scenarios.
