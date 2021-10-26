@@ -13,11 +13,11 @@ These limitations put aside, it's was a good interesting optimization problem. H
 import and run the notebook into a https://colab.research.google.com/. The calculus may take several hours, depending on the number of scenarios.
 
 # Problem analysis
-The hard problem could be sum up on 
+The hard problem could be splitted in two questions :  
 1) how do we estimate the risk probability for the various disruptions.
 2) how do  we modelize the supply chain
 
-For example, let's say,
+For the first question, let's say,
  - we are 100% sure we will have full disruption of our DC each year. In that case, it is better to directly buy backup inventory of Finished Goods to cover our full yearly demand at the beginning of the year. We will endure holding cost but we are sure we will use this inventory.
  - but now, let's say we are only 20% sure our DC will fail each year. Are we going to buy a full year of backup FG and pay full holding cost even though we will not use it ? In that case, it may be worth paying an option for an additionnal DC.
 
