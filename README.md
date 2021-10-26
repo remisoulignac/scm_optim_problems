@@ -8,10 +8,10 @@ Moreover, the score of SCXScream is calculated as if each scenario had the same 
 
 These limitations put aside, it's was a good interesting optimization problem. However, because SCREAM Simulator is a black box, I am not sure MILP was the best way to find the solution. A better solution could be a Monte Carlo approach which would directly target the REST API (https://scxscream.herokuapp.com/tests/) with various backup parameters and test scenarios.
 
-# usage
+# Usage
 import and run the notebook into a https://colab.research.google.com/. The calculus may take several hours, depending on the number of scenarios.
 
-# problem analysis
+# Problem analysis
 The hard problem could be sum up on 
 1) how do we estimate the risk probability for the various disruptions.
 2) how do  we modelize the supply chain
@@ -26,15 +26,15 @@ Now let's say we have :
 What should be the optimal mix of WIP backup inventory, FG backup inventory, Supplier Backup Option, ...?
 
 The question lies with how we estimate disruption probability risks of the supply chain of the proposed Use Case Textile Computation, Inc.
-- The company is vertically-integrated => Good Control
-- The supply chain is very simple => Low complexity
-- Waco, Texas Factory has no union force => Lower risks of strike
-- Texas : what are the risk probability disaster in Texas ? Here is a gold mine to help estimate this : https://hazards.fema.gov/nri/map. Dallas is "Relatively Moderate". One can find raw figures here https://hazards.fema.gov/nri/data-resources#csvDownload. We see that for county of McLennan (the one of the Waco Factory) that the "the number of occurrences per year of various hazard occurrence " are
- - Drought : 28 events/year
- - Earthquake : 0 events/year
- - Hail : 4 events/year
- - Landslide : 80 events/year
- - Strong Wind : 2 events/year
+* The company is vertically-integrated => Good Control
+* The supply chain is very simple => Low complexity
+* Waco, Texas Factory has no union force => Lower risks of strike
+* Texas : what are the risk probability disaster in Texas ? Here is a gold mine to help estimate this : https://hazards.fema.gov/nri/map. Dallas is "Relatively Moderate". One can find raw figures here https://hazards.fema.gov/nri/data-resources#csvDownload. We see that for county of McLennan (the one of the Waco Factory) that the "the number of occurrences per year of various hazard occurrence " are
+  - Drought : 28 events/year
+  - Earthquake : 0 events/year
+  - Hail : 4 events/year
+  - Landslide : 80 events/year
+  - Strong Wind : 2 events/year
 These figures relate to the entire county. So the probability and the level of disruption to apply to the factory of Waco should be adjusted accordingly.
 
 Then, we keep on this analysis for the other parts of the supply chain.
@@ -44,10 +44,11 @@ Now, another challenge is how to convert these qualitative and statistics into a
  - [Ensemble Model Development for the Prediction of a Disaster Index in Water Treatment Systems](https://www.mdpi.com/2073-4441/12/11/3195)
  - https://public.wmo.int/en/resources/bulletin/quantifying-risk-disasters-occur-hazard-information-probabilistic-risk-assessment
  - [Fat Tailed Distributions for Deaths in Conflicts and Disasters](https://www.researchgate.net/publication/305983595_Fat_Tailed_Distributions_for_Deaths_in_Conflicts_and_Disasters)
-These publications highlight the importance of the Power Law to estimate the probability of disasters.
+
+These publications highlight the importance of the Power Law continous distribution to estimate the probability of disasters.
 The discrete distribution matching the continuous Power Law distribution is the Zipf distribution. It is a very wild distribution. The mean of a draw is very variable. If you target a mean, let's say of 3 disrupted weeks per year over 10 years, you may have to draw one hundred times to get a serie matching the mean.
 
-Once we have finished identifying the various probabiliy distributions of disasters, we apply these scenarios to a modelized supply chain. The goal is to find the most resilient supply chain, that is to say the supply chain which will statistically provide the best expectation of Profit and Item Fill Rate. We play with a penalty applied to missed sale to favor higher Item Fill Rate.
+Once we have finished identifying the various probabiliy distributions of disasters, we apply these scenarios to a modelized supply chain. The goal is to find the most resilient supply chain, that is to say the supply chain which will statistically provide the best expectation of Profit and Item Fill Rate. We play with a penalty applied to missed sales to favor higher Item Fill Rate.
 
 MILP is very aggressive at optimizing : it will tend to accumulate inventory before the disruptions, up to the full capacity of the facilities. That is not realistic because normally, one doesn't know that disruption occurs. To force MILP to not anticipate, we apply a limit on the flow between the facilities : the cumulative sum of the flows cannot be greater than the demand over the same period.
 
