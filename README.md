@@ -1,5 +1,5 @@
 # SCX SCREAM
-This is my  attempt using Mixed Integer Linear Programming to find the best solution for the SCREAM challenge http://scxscream.herokuapp.com/home/.
+This is my  attempt using Mixed Integer Linear Programming to find the best solution for the MIT SCREAM challenge http://scxscream.herokuapp.com/home/.
 
 Let's put it right away : it does not give the best answer. Indeed, I found it extremely hard to understand and modelize properly the behaviour of the SCREAM simulator. There are few strange behaviours like :
  - even with DC, Plant and Supplier closed for a year and with no backup, you still make profit !
