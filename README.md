@@ -7,16 +7,20 @@ open https://colab.research.google.com/, import the notebook from github and run
 ## SC2X 
 SC2X_Python_Samples.ipynb shows some problems from SC2X course solved with Python 
 
-## MIT SCX SCREAM
-This is an attempt using Mixed Integer Linear Programming and the Google open source OR-TOOLS library to find the best solution for the MIT SCREAM challenge http://scxscream.herokuapp.com/home/.
+## SCREAM challenge
+This is an attempt to find the best solution for the MIT SCREAM challenge http://scxscream.herokuapp.com/home/ with Mixed Integer Linear Programming and the Google open source OR-TOOLS library.
 
-Let's put it right away : it does not give the best answer. Indeed, I found it extremely hard to understand and modelize properly the behaviour of the SCREAM simulator. There are few strange behaviours like :
+This notebook showcases :
+ - intensive use of OR-TOOLS library
+ - how to test a complex MILP model
+
+Unfortunately, it does not give the best answer. Indeed, I was extremely hard to modelize properly the behaviour of the SCREAM simulator. There are few strange behaviours in the simulator like :
  - even with DC, Plant and Supplier closed for a year and with no backup, you still make profit !
  - when you buy backup FG inventory upfront you only pay the conversion costs $20. You will pay $50 more for the WIP once you use this backup FG. But you don't need to ensure how these WIP will be delivered to you. These WIP are there even if your supplier or plant are closed. I don't understand how one can accumulate a "conversion inventory".
 
 Moreover, the score of SCXScream is calculated as if each scenario had the same probability of occurence. Here, with the present solution, we try to find the best solution for a combinaison of random scenarios based on their probability of occurence. 
 
-These limitations put aside, it's was a interesting optimization problem. However, because SCREAM Simulator is a black box, MILP does not seem to be the best way to find the best solution. A better approach could be using Monte Carlo for generating various backup parameters and test scenarios and using the REST API (https://scxscream.herokuapp.com/tests/) to get the calculated profit and Item Fill Rate.
+These limitations put aside, it's an interesting optimization problem. However, because SCREAM Simulator is a black box, MILP does not seem to be the best way to find the best solution. A better approach could be using Monte Carlo for generating various backup parameters and test scenarios and using the REST API (https://scxscream.herokuapp.com/tests/) to get the calculated profit and Item Fill Rate.
 
 This work was inspired by https://github.com/JorgeGarciaCastillo/SCREAM/. It is a similar attempt done a few years ago. It is based on java and the IBM CPLEX opimization engine. 
 
