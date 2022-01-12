@@ -1,5 +1,15 @@
-# MIT SCX SCREAM
-This is my  attempt using Mixed Integer Linear Programming to find the best solution for the MIT SCREAM challenge http://scxscream.herokuapp.com/home/.
+# MIT SCX by Python
+You'll find here various
+
+## Usage
+open https://colab.research.google.com/, import the notebook from github and run the notebook it :)
+
+## SC2X 
+SC2X_Python_Samples.ipynb shows some problems from SC2X course solved with Python 
+
+
+## MIT SCX SCREAM
+This is an attempt using Mixed Integer Linear Programming and the Google open source OR-TOOLS library to find the best solution for the MIT SCREAM challenge http://scxscream.herokuapp.com/home/.
 
 Let's put it right away : it does not give the best answer. Indeed, I found it extremely hard to understand and modelize properly the behaviour of the SCREAM simulator. There are few strange behaviours like :
  - even with DC, Plant and Supplier closed for a year and with no backup, you still make profit !
@@ -11,10 +21,8 @@ These limitations put aside, it's was a interesting optimization problem. Howeve
 
 This work was inspired by https://github.com/JorgeGarciaCastillo/SCREAM/. It is a similar attempt done a few years ago. It is based on java and the IBM CPLEX opimization engine. 
 
-# Usage
-import and run the notebook into a https://colab.research.google.com/. The calculus may take several hours, depending on the number of scenarios.
 
-# Problem analysis
+### Problem analysis
 The hard problem could be splitted into two questions :  
 1) how do we estimate the risk probability for the various disruptions.
 2) how do  we modelize the supply chain
