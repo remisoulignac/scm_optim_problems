@@ -1,12 +1,11 @@
 # MIT SCX by Python
-You'll find here various
+You'll find here various ways to use Python to solve Supply Chain Optimization problems
 
 ## Usage
 open https://colab.research.google.com/, import the notebook from github and run the notebook it :)
 
 ## SC2X 
 SC2X_Python_Samples.ipynb shows some problems from SC2X course solved with Python 
-
 
 ## MIT SCX SCREAM
 This is an attempt using Mixed Integer Linear Programming and the Google open source OR-TOOLS library to find the best solution for the MIT SCREAM challenge http://scxscream.herokuapp.com/home/.
