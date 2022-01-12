@@ -4,6 +4,9 @@ You'll find here various ways to use Python to solve Supply Chain Optimization p
 ## Usage
 open https://colab.research.google.com/, import the notebook from github and run the notebook :)
 
+## SC0X 
+SC0X_Python_Samples.ipynb shows some problems from SC0X course solved with Python 
+
 ## SC2X 
 SC2X_Python_Samples.ipynb shows some problems from SC2X course solved with Python 
 
