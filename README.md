@@ -17,3 +17,6 @@ SC2X_Python_Samples.ipynb shows some problems from SC2X course solved with Pytho
 The objective of the SCREAM challenge is to design a risk mitigation strategy to minimize total supply chain costs or maximize total supply chain profits while also maximizing the order fill rate (Service Level) over an uncertain future.
 - SC3X-Scream1_MILP.ipynb showcases a first attempt using an advanced model of the objective function using MILP and the Google OR-Tools Library
 - SC3X_Scream2_Hyper_parameter_optimization.ipynb showcases a second attempt using the [hyperopt](http://hyperopt.github.io/hyperopt/) library
+
+## SCM290
+Additionnal MIT course focused en Sustainable Supply Chain Management : https://www.edx.org/course/mitx-sustainable-supply-chain
