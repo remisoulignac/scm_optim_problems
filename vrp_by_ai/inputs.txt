@@ -1,0 +1,238 @@
+Using state of the art algorithms, help me build a solution to the bellow problem. As you can understand we must factor in the CO2 emission in the Vehicle Routing Problem. The Arc Cost is not the distance anymore but the CO2 emission over each Arc, that is not linear and depends on 2 decision variables
+- the current load of the vehicle, meaning the list of nodes it visited before.
+- its speed
+
+
+You will be in charge of deciding the most adequate vehicle routing for the last mile delivery of one day in the city of Xalapa, in Mexico. You will work only with one vehicle and 30 customers for home delivery. It is your job to consider what sequence you must follow to hand out the products to the customers. For your strategy, you may need to consider the distance, product weight, vehicule speed and topography in your decisions, since your main indicators are distance, cost and CO2 emissions, being this last one our highest priority. Please consider that each product is assigned to one client and each client must be visited only once. Historically this route has had daily rate of 50 kg of CO2 emissions, and so, it is desirable to find a better route that will help decrease this number in 10% as a target. 
+The truck leaves a DC (node 0) and must return at then to the same DC.
+
+
+What are the best available algorithms to solve this problem and converge quickly ? It is way harder than the classical VRP problem due to the variable arc cost.
+Is there open source libraries that can help ?
+Please draft an algorithm and the librairie calls
+
+
+you'll use this formula for fuel consumption : 
+
+CurbWeight = 5500   # kg, Curb weight (Medium Duty Truck)
+L = 28000   # kg, Maximum Load
+k = 0.20    # kJ/rev/L, Engine friction factor
+N = 33      # rps, Engine speed
+V = 5       # L, Engine displacement
+Cd = 0.7   # Coefficient of aerodynamics drag
+A =  3.912    # m^2, Frontal Surface Areal
+
+Xi = 1      # Fuel to Air Mass Ratio
+g = 9.81    # m/s^2, Gravitational Constant
+Ro = 1.2041 # kg/m^3, Air Density
+Cr = 0.01   # Coefficient of rolling resistance
+Eta = 0.45  # Efficiency parameter for diesel engines
+Eta_tf = 0.45 # Vehicule drivetrain efficiency
+Kappa = 44  # kJ/g, Heating value of a typical diesel fuel
+Psi = 737   # Conversion factor (g/s to L/s)
+Beta = Cd*Ro*A/2
+
+Gamma = 1/(1000*Eta*Eta_tf)
+Lambda = Xi/(Kappa*Psi)
+FuelToCO2=2.65 # kg/l
+
+
+# acceleration(m/s), distance(km), angle(degrees), load (kg), speed (km/h)
+def FuelConsumption(acceleration, distance, slope, total_weight, v):
+  v=v/3.6  #convert to m/s
+  if (slope >= 0): #Topography model
+    degree=slope*0.57
+    theta=degree*math.pi/180 # radian
+    Alpha=acceleration+g*math.sin(theta)+g*Cr*math.cos(theta)
+    return Lambda*distance/v*(k*N*V+Gamma*(total_weight*Alpha*v)+Beta*Gamma*v**3)
+  else: #Planar Model
+    return Lambda*distance/v*(k*N*V)
+
+
+suppose also you are given (the details data are in the file data.txt)
+- a distance_matrix_kilometer with distances between 2 nodes.
+- a slope_matrix_gradient with the slope between 2 nodes
+- a demand array with the demand at each node
+- a delivery_time_minute array with the time needed for each node to unload the required cargo
+- and time_window_min_max_minute array : this gives in minutes a tuple (start,end) when each node can be visited. For exemple (0, 120) means the node can be visited between 0 and 120 minutes after leaving the Distribution Center
+- the vehicle speed can go from 20kmh to 40kmh
+
+
+IMPORTANT : you will follow the following Draft Algorithm and Library Calls (Python)
+The core of your solution is decoupling the problem. The main algorithm (ALNS) will optimize the tour sequence. For each arc in that sequence, a sub-algorithm will optimize the speed.
+
+Prerequisite: Your CO2 Model
+You must first have a function that models your CO2 emissions. This is the "secret sauce" and is critical. It would look like this:
+
+Python
+
+# This is a hypothetical model. You must get a realistic one
+# based on vehicle physics.
+class CO2Model:
+    def calculate_kg(self, distance_km, speed_kmh, load_kg, gradient_percent):
+        # A realistic model would be non-linear.
+        # Example: base_rate(speed) * load_factor(load) * gradient_factor(gradient) * distance
+        # For this draft, we'll use a placeholder.
+        base_emission_per_km = 0.5 + (speed_kmh - 30)**2 / 100 
+        load_factor = 1 + (load_kg / 1000) # e.g., 1000kg max load
+        gradient_factor = 1 + (gradient_percent / 10)
+        
+        # Total CO2 in kg for this arc
+        return (base_emission_per_km * load_factor * gradient_factor) * distance_km
+
+Step 1: The Arc Cost & Speed Sub-ProblemFor any arc $(i, j)$ and a given current_load, we must find the optimal speed $v \in [20, 40]$ that minimizes CO2. We use scipy.optimize.minimize_scalar for this.Pythonfrom scipy.optimize import minimize_scalar
+
+def get_optimal_arc_cost(from_node, to_node, current_load):
+    """
+    Finds the minimum CO2 cost for a single arc (i, j) by
+    optimizing the speed.
+    """
+    distance = distance_matrix[from_node][to_node]
+    gradient = gradient_matrix[from_node][to_node]
+    
+    # This is the objective function for the speed optimizer
+    def co2_objective_for_speed(speed_kmh):
+        return co2_model.calculate_kg(
+            distance_km=distance,
+            speed_kmh=speed_kmh,
+            load_kg=current_load,
+            gradient_percent=gradient
+        )
+
+    # Solve the 1D optimization problem
+    result = minimize_scalar(
+        co2_objective_for_speed,
+        method='bounded',
+        bounds=(20, 40) # The speed constraint
+    )
+    
+    # result.fun is the minimum CO2 (in kg) for this arc
+    return result.fun
+Step 2: The Tour Cost Evaluation FunctionThis is the main objective function for the ALNS algorithm. It takes a complete tour and calculates its total CO2 cost by summing the optimal costs of its arcs.Pythondef evaluate_tour_cost(tour_permutation):
+    """
+    Calculates the total CO2 cost for an entire tour permutation.
+    e.g., tour_permutation = [0, 5, 12, 2, ..., 30, 0]
+    """
+    total_co2 = 0
+    current_load = total_demand  # Start with a full truck
+
+    for i in range(len(tour_permutation) - 1):
+        node_A = tour_permutation[i]
+        node_B = tour_permutation[i+1]
+        
+        # Call our arc-cost solver from Step 1
+        optimal_arc_co2 = get_optimal_arc_cost(node_A, node_B, current_load)
+        
+        total_co2 += optimal_arc_co2
+        
+        # Update the load for the *next* arc
+        current_load -= demands[node_B]
+        
+    return total_co2
+Step 3: The ALNS Algorithm Draft (using alns library)Now we plug these functions into the alns library.Python# Install with: pip install alns numpy scipy
+import numpy as np
+import random
+from alns import ALNS, State
+from alns.accept import RecordToRecordTravel
+from alns.stop import MaxIterations
+from alns.weights import SimpleWeights
+
+# 1. Define our "State" object
+class TourState(State):
+    
+    def __init__(self, tour):
+        # tour is a list of nodes, e.g. [0, 1, 2, ..., 30, 0]
+        self.tour = tour
+    
+    def objective(self):
+        # The ALNS library calls this to get the cost
+        # This is where our expensive, state-dependent
+        # evaluation happens.
+        return evaluate_tour_cost(self.tour)
+    
+    def copy(self):
+        return TourState(self.tour.copy())
+
+# 2. Define Destroy and Repair operators (example)
+def random_destroy(state, random_state):
+    """
+    Removes 20% of customers from the tour.
+    """
+    tour_no_depot = state.tour[1:-1]
+    n_to_remove = max(1, int(len(tour_no_depot) * 0.2))
+    
+    removed_nodes = []
+    for _ in range(n_to_remove):
+        idx = random_state.randint(0, len(tour_no_depot) - 1)
+        removed_nodes.append(tour_no_depot.pop(idx))
+    
+    new_state = TourState([0] + tour_no_depot + [0])
+    return new_state, removed_nodes
+
+def greedy_repair(state, removed_nodes, random_state):
+    """
+    Re-inserts removed nodes one by one at the best (lowest CO2) position.
+    """
+    for node in removed_nodes:
+        best_cost = float('inf')
+        best_idx = -1
+        
+        # Try inserting 'node' into every possible position
+        for idx in range(1, len(state.tour)):
+            test_tour = state.tour[:idx] + [node] + state.tour[idx:]
+            
+            # This is slow, but correct. It re-evaluates the
+            # ENTIRE tour. A faster way is "delta-evaluation".
+            test_cost = evaluate_tour_cost(test_tour)
+            
+            if test_cost < best_cost:
+                best_cost = test_cost
+                best_idx = idx
+        
+        # Insert at the best found position
+        state.tour.insert(best_idx, node)
+        
+    return state
+
+# 3. Run the ALNS algorithm
+if __name__ == "__main__":
+    # --- Load your data here ---
+    # distance_matrix, gradient_matrix, demands, total_demand
+    # ...
+    
+    # Create an initial solution (e.g., random order)
+    initial_nodes = list(range(1, 31))
+    random.shuffle(initial_nodes)
+    initial_tour = [0] + initial_nodes + [0]
+    initial_state = TourState(initial_tour)
+    
+    # Initialize ALNS
+    alns = ALNS(random.RandomState(1234)) # Seed
+    
+    # Add operators
+    alns.add_destroy_operator(random_destroy)
+    # (add more destroy operators... e.g., worst_removal)
+    alns.add_repair_operator(greedy_repair)
+    # (add more repair operators... e.g., regret_insertion)
+
+    # Set selection, acceptance, and stopping criteria
+    weights = SimpleWeights([1], [1], decay=0.8)
+    accept = RecordToRecordTravel(start_prob=0.1, end_prob=0.001, step=0.01)
+    stop = MaxIterations(1000) # 1000 iterations
+    
+    print("Starting ALNS... (This may take a few minutes)")
+    
+    # Run the search
+    result = alns.iterate(initial_state, weights, accept, stop)
+
+    # Get the best solution
+    best_solution = result.best_state
+    best_cost = best_solution.objective()
+    
+    print(f"Best tour found: {best_solution.tour}")
+    print(f"Best CO2 (kg): {best_cost:.2f}")
+    
+    if best_cost <= 45:
+        print(f"✅ Success! Target of 45kg met. (Baseline: 50kg)")
+    else:
+        print(f"❌ Target not met. Best found was {best_cost:.2f}kg.")
