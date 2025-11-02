@@ -1,0 +1,260 @@
+Using state of the art algorithms, help me build a solution to the bellow problem. As you can understand we must factor in the CO2 emission in the Vehicle Routing Problem. The Arc Cost is not the distance anymore but the CO2 emission over each Arc, that is not linear and depends on 2 decision variables
+- the current load of the vehicle, meaning the list of nodes it visited before.
+- its speed
+
+
+You will be in charge of deciding the most adequate vehicle routing for the last mile delivery of one day in the city of Xalapa, in Mexico. You will work only with one vehicle and 30 customers for home delivery. It is your job to consider what sequence you must follow to hand out the products to the customers. For your strategy, you may need to consider the distance, product weight, vehicule speed and topography in your decisions, since your main indicators are distance, cost and CO2 emissions, being this last one our highest priority. Please consider that each product is assigned to one client and each client must be visited only once. Historically this route has had daily rate of 50 kg of CO2 emissions, and so, it is desirable to find a better route that will help decrease this number in 10% as a target. 
+The truck leaves a DC (node 0) and must return at then to the same DC.
+
+
+What are the best available algorithms to solve this problem and converge quickly ? It is way harder than the classical VRP problem due to the variable arc cost.
+Is there open source libraries that can help ?
+Please draft an algorithm and the librairie calls
+
+
+you'll use this formula for fuel consumption : 
+
+    function fuel_consumption(slope, distance_km, load, speed_kmh){
+
+            // calculations as per Moradi, Arts and Velazquez-Martinez - "Load Asymptotics and Dynamic Speed Optimization for the Greenest Path Problem: A Comprehensive Analysis"
+
+            angle_radians = slope // approximation with 1% precision if slope < 0.15
+
+            speed_ms = speed_kmh / 3.6;
+            distance_m = distance_km * 1000
+            //let planar = (((1/(44 * 737))* distance_m) / speed_ms)*(0.2 * 33 * 5);
+            epsilon = 1; //fuel-to-air ratio
+            kapa = 44; //heating value of diesel
+            psi = 737; // conversion factor
+            k = 0.2; // engine friction
+            N = 33; // engine speed, in rps
+            D = 5; // engine displacement, in liters
+            P = epsilon * k * N * D / (kapa * psi);
+            //planar = P * distance_m / speed_ms;
+
+            eta = 0.45 // engine efficiency
+            eta_t = 0.45 // drivetrain efficiency
+            Q = epsilon/(1000 * eta * eta_t * kapa * psi);
+
+            g = 9.81; // gravity accel
+            Cr = 0.01; // coefficient of rolling resistance
+            acceleration_theta = g * Math.sin(angle_radians) + g * Cr * Math.cos(angle_radians);
+
+            ro = 1.2041; // air resistance
+            S = 8; // frontal area
+            Cd = 0.7; // Coefficient of aerodinamic drag
+            R = epsilon * Cd * ro * S / (2000 * eta * eta_t * kapa * psi)
+
+            //let wyav = 5500 * (1/(1000 * .45 * .45)) * acceleration_theta * speed_ms;
+            //let yafv = (1/(1000* .45 * .45))* acceleration_theta * weight * speed_ms;
+            //let byv3 = (0.5 * 0.7 * 8 * 1.2041)*(1 / (1000 * .45 * .45)) * Math.pow(speed_ms, 3);
+            //let lamda = 0.00003084
+            //let kNNV = 33
+            //let topography = (lamda * (kNNV + wyav + yafv + byv3) * distance_m) / speed_ms;
+
+            w = 5000; //truck_weight, in kg
+            fuel_consumed = P * distance_m / speed_ms + Math.max(0, Q * distance_m * acceleration_theta * (w + load) + R * distance_m * Math.pow(speed_ms, 2));
+
+            return fuel_consumed;
+        }
+
+you are also given :
+
+# distance matrix between two node 
+const distance_matrix_km = [ [0.0,10.1,15.6,12.4,10.1,10.2,13.9,10.5,5.0,5.3,2.1,11.3,18.7,5.0,2.2,16.7,14.5,9.2,14.4,8.4,13.4,10.2,13.3,15.6,7.3,4.1,8.8,13.4,3.0,15.7,11.8,], [9.6,0.0,9.2,9.3,0.9,2.9,4.3,10.0,9.2,10.1,9.1,5.2,10.7,9.8,8.8,8.0,12.4,2.4,5.9,6.1,4.2,2.6,8.8,9.9,7.8,8.2,6.5,4.9,8.8,7.2,6.1,], [15.7,9.1,0.0,2.5,10.0,11.7,10.4,2.9,13.8,9.3,13.7,4.3,2.1,8.8,13.4,7.6,5.0,9.0,6.8,6.3,11.6,5.1,1.3,1.3,6.3,9.1,5.6,7.0,14.5,6.3,3.4,], [13.3,9.1,2.4,0.0,10.1,11.8,10.6,1.0,11.5,7.0,11.4,4.1,4.4,6.5,11.1,8.6,4.4,9.0,7.3,4.0,11.8,2.8,1.0,1.8,4.0,6.8,4.3,7.1,8.7,7.3,3.5,], [10.0,0.9,9.9,9.9,0.0,2.8,4.9,10.5,9.6,10.6,9.5,5.9,11.4,10.2,9.2,8.7,13.1,1.1,6.6,6.5,5.3,9.2,9.5,10.5,8.3,8.6,6.9,5.6,9.2,7.9,8.3,], [9.3,3.2,12.4,11.1,3.2,0.0,6.0,11.5,8.8,11.6,8.7,8.4,13.9,11.3,8.5,11.2,15.6,5.2,9.1,7.5,5.6,10.1,12.0,13.0,9.2,9.0,7.9,8.1,10.2,10.4,9.2,], [13.3,4.1,10.6,11.1,5.0,6.6,0.0,13.1,12.9,13.9,12.8,6.6,10.9,13.5,12.5,6.3,13.8,5.4,4.2,9.6,1.1,11.8,10.4,11.3,11.5,11.9,8.8,4.0,12.5,5.5,7.9,], [12.0,10.2,2.9,1.0,10.4,12.1,11.6,0.0,11.9,6.3,11.8,5.1,4.8,5.5,11.5,9.4,4.1,9.4,8.3,4.4,12.8,3.2,2.0,2.2,3.7,7.2,4.7,8.1,8.0,8.1,4.5,], [4.4,9.2,13.4,11.5,9.2,10.4,13.0,11.9,0.0,8.6,2.4,10.1,15.6,8.3,2.4,15.8,17.5,8.7,13.6,8.4,12.6,10.5,12.5,13.5,9.3,6.0,8.3,12.5,7.2,14.8,10.9,], [6.3,11.9,10.5,7.2,11.9,13.1,14.5,6.2,8.7,0.0,6.8,9.6,11.0,0.8,6.6,15.6,8.6,11.4,13.8,5.4,14.0,5.0,8.5,8.2,3.1,3.1,5.8,12.1,2.9,14.9,10.5,], [2.1,10.0,12.9,11.0,10.0,11.3,13.8,11.4,2.4,6.6,0.0,9.6,15.1,6.3,0.2,15.5,15.8,9.5,13.3,7.4,13.4,10.0,12.0,13.0,8.6,5.4,8.2,12.2,4.3,14.5,10.4,], [11.6,5.2,4.4,3.9,6.1,7.8,6.3,4.4,11.2,9.3,11.1,0.0,5.6,8.7,10.8,5.9,7.7,4.8,3.8,4.7,7.4,5.1,4.1,5.1,6.3,9.7,4.0,2.7,10.3,4.9,1.3,], [17.3,10.5,2.2,4.4,11.4,13.2,10.8,4.8,15.1,11.8,19.2,5.3,0.0,10.8,14.7,8.1,6.9,10.3,7.2,8.3,12.0,6.9,3.3,3.0,8.0,11.1,7.6,8.0,15.4,6.8,4.5,], [5.9,11.6,9.0,6.5,11.6,12.8,13.6,5.7,8.3,0.8,6.4,8.7,11.1,0.0,6.2,14.6,10.3,11.0,12.3,4.7,13.1,3.8,7.5,8.1,2.4,2.7,5.2,11.2,2.5,13.4,9.8,], [2.1,10.0,12.8,11.0,9.9,11.2,13.7,11.3,3.2,6.6,0.2,9.5,15.1,6.2,0.0,15.4,15.8,8.0,13.2,7.3,13.3,10.0,11.9,12.9,8.5,5.3,7.7,12.1,4.2,14.4,10.4,], [16.3,7.8,7.5,8.5,9.0,10.7,6.4,9.4,15.8,15.0,15.7,6.1,8.2,14.4,15.4,0.0,11.5,9.5,2.4,10.4,7.6,10.8,7.7,8.4,12.0,14.3,9.7,3.9,14.9,1.3,6.5,], [13.3,10.9,3.9,3.0,11.8,13.6,12.5,2.8,17.3,9.2,14.9,6.1,5.6,6.9,14.6,10.2,0.0,10.8,9.0,7.6,13.8,5.2,2.8,2.4,5.1,9.8,7.6,8.8,9.6,8.9,5.3,], [10.5,2.6,8.9,9.0,1.1,3.8,6.1,9.7,9.2,11.0,9.1,4.9,10.5,10.6,8.8,9.9,12.1,0.0,7.4,6.2,5.9,8.3,8.5,9.6,7.9,8.1,6.4,6.4,9.7,8.9,5.8,], [14.0,5.7,6.7,7.2,6.6,8.3,4.1,8.1,13.5,12.8,13.4,3.8,7.3,12.2,13.1,2.3,10.4,7.3,0.0,8.2,5.3,8.6,6.8,7.6,9.7,12.0,7.4,1.7,12.6,1.4,3.6,], [8.7,6.4,5.9,3.6,7.3,9.0,8.6,4.0,8.2,6.2,8.2,4.2,7.3,6.0,7.9,10.1,8.2,6.3,7.9,0.0,9.2,2.6,4.6,5.5,2.8,4.7,0.7,6.8,6.0,9.1,4.6,], [12.8,4.2,11.7,11.9,4.8,6.1,1.1,12.6,12.4,13.4,12.3,7.7,12.1,13.0,12.0,7.4,15.0,6.0,5.3,9.1,0.0,11.3,11.5,12.4,11.6,11.4,9.4,5.1,13.3,6.6,8.7,], [9.5,8.2,5.3,2.8,9.1,10.8,10.3,3.2,10.6,4.4,10.0,4.8,7.4,3.8,9.8,10.7,6.1,8.1,8.7,3.1,11.0,0.0,3.8,4.6,1.2,4.9,3.4,7.5,6.1,9.7,5.3,], [14.3,8.4,1.4,1.0,9.3,11.1,9.9,2.1,12.4,7.9,12.3,3.6,3.6,7.4,12.0,8.0,4.2,8.3,6.5,4.9,11.3,3.7,0.0,1.2,4.9,7.7,4.9,6.3,8.7,6.7,2.8,], [14.1,9.8,1.3,1.8,10.6,12.4,11.3,2.1,13.6,8.2,13.5,5.0,3.2,7.6,13.2,8.4,2.4,9.6,7.5,6.1,12.6,4.7,1.2,0.0,5.9,8.9,6.4,7.6,11.8,7.1,4.1,], [8.6,8.6,6.5,4.0,9.5,11.3,11.9,3.7,9.3,3.1,11.2,6.0,8.5,2.5,9.0,11.9,6.4,8.5,9.8,3.0,11.5,1.3,4.9,6.0,0.0,3.8,3.5,8.7,4.8,10.9,6.5,], [4.9,9.3,9.5,7.0,9.3,10.5,13.0,7.3,6.0,3.1,5.4,8.5,11.5,2.7,5.2,14.4,11.9,8.7,12.1,4.5,12.6,5.0,7.9,9.0,3.8,0.0,4.9,11.0,1.0,13.0,9.0,], [8.7,6.0,5.5,4.6,6.9,8.6,9.3,5.0,8.3,5.7,8.2,3.9,6.9,5.9,7.9,9.8,8.7,5.9,7.6,0.7,8.8,3.4,5.1,6.2,3.1,4.8,0.0,6.4,6.1,8.7,4.2,], [12.8,4.9,7.5,7.8,5.8,7.6,3.4,8.1,12.4,11.6,12.3,3.8,8.2,11.0,12.0,3.8,11.1,5.9,1.4,7.0,4.5,7.4,7.5,8.4,8.5,10.9,6.3,0.0,12.1,2.7,4.2,], [3.5,10.6,10.3,7.8,10.6,10.7,14.0,8.0,6.7,2.8,4.4,9.1,13.1,2.5,4.2,15.0,11.7,10.0,12.8,5.3,13.6,6.3,8.8,12.1,4.7,1.0,5.8,11.6,0.0,14.0,9.9,], [15.0,7.1,6.2,7.2,8.0,9.7,5.5,8.1,14.5,13.7,14.4,5.3,6.9,13.1,14.1,1.3,10.2,8.3,1.3,9.1,6.6,9.5,6.4,7.1,10.7,13.0,8.4,2.7,13.6,0.0,5.0,], [11.3,5.8,3.4,3.4,6.7,8.5,7.4,4.2,10.8,9.5,10.7,1.0,4.5,8.9,10.5,6.5,6.6,5.7,3.6,4.9,8.5,5.3,3.0,4.0,6.4,9.2,4.2,3.8,9.9,4.9,0.0,],]
+
+# the average slope between two nodes in gradient
+const average_slope_matrix_gradient = [ [0,-0.0003,0.0009,0.003,-0.0012,-0.0014,0.0004,0.0038,-0.0034,0.0015,-0.009,-0.0019,0.0002,0.0018,-0.0086,0.0028,0.0019,-0.0014,0.0006,0.005,0.0007,0.0039,0.002,0.0015,0.0038,-0.0029,0.003,-0.0006,-0.005,0.0006,0.0008,], [0.0003,0,0.0018,0.0043,-0.01,-0.0038,0.0021,0.0043,-0.0015,0.0011,-0.0018,-0.0035,0.0007,0.0012,-0.0018,0.0062,0.0025,-0.0042,0.002,0.0074,0.0031,0.0165,0.0034,0.0027,0.004,-0.0011,0.0045,-0.001,-0.0014,0.0018,0.0021,], [-0.0009,-0.0019,0,0.0092,-0.0026,-0.0024,-0.0008,0.009,-0.0022,-0.0006,-0.0024,-0.0081,-0.0048,-0.0006,-0.0025,0.0043,0.0028,-0.003,-0.0007,0.0044,-0.0003,0.0051,0.01,0.0077,0.0022,-0.0029,0.0021,-0.0031,-0.002,-0.0006,-0.0012,], [-0.0028,-0.0044,-0.0096,0,-0.0049,-0.0043,-0.0029,0.003,-0.0047,-0.0041,-0.0049,-0.0141,-0.0075,-0.0043,-0.005,0.0012,-0.002,-0.0056,-0.0038,0.0012,-0.0023,0.0011,-0.01,-0.0072,-0.0022,-0.0072,-0.0026,-0.0063,-0.006,-0.0037,-0.0077,], [0.0012,0.01,0.0026,0.0049,0,-0.0007,0.0037,0.005,-0.0005,0.0019,-0.0007,-0.0015,0.0014,0.0021,-0.0008,0.0068,0.0031,-0.0009,0.0032,0.0083,0.0042,0.0057,0.0041,0.0034,0.0048,0.0,0.0055,0.0007,-0.0003,0.0028,0.0027,], [0.0015,0.0034,0.0023,0.0046,0.0006,0,0.0033,0.0047,-0.0003,0.0019,-0.0006,-0.0008,0.0013,0.002,-0.0006,0.0054,0.0027,0.0002,0.0025,0.0075,0.0043,0.0053,0.0034,0.0029,0.0046,0.0002,0.0051,0.0007,-0.0001,0.0023,0.0026,], [-0.0005,-0.0022,0.0008,0.0028,-0.0036,-0.003,0,0.0026,-0.0018,0.0001,-0.002,-0.0041,-0.0002,0.0002,-0.002,0.0065,0.0016,-0.0035,0.0007,0.0038,0.0036,0.0029,0.002,0.0016,0.0019,-0.0015,0.0023,-0.0035,-0.0017,0.0007,0.0005,], [-0.0033,-0.0042,-0.009,-0.003,-0.005,-0.0045,-0.0029,0,-0.0048,-0.0051,-0.005,-0.012,-0.0075,-0.0056,-0.0051,0.0007,-0.0029,-0.0056,-0.0037,0.0005,-0.0023,0.0,-0.0065,-0.0073,-0.0032,-0.0072,-0.003,-0.0059,-0.0069,-0.0037,-0.0067,], [0.0039,0.0015,0.0023,0.0047,0.0005,0.0003,0.0018,0.0048,0,0.0029,-0.0008,-0.0004,0.0013,0.0031,-0.0008,0.0041,0.0026,0.0005,0.0019,0.007,0.0021,0.0054,0.0035,0.003,0.0048,0.0008,0.0052,0.0007,0.0003,0.0018,0.0025,], [-0.0013,-0.0009,0.0006,0.004,-0.0017,-0.0017,-0.0001,0.0052,-0.0029,0,-0.004,-0.003,-0.0004,0.0012,-0.0041,0.0025,0.0023,-0.0018,0.0001,0.0063,0.0001,0.0064,0.0022,0.002,0.0065,-0.0065,0.0031,-0.0013,-0.0079,0.0001,0.0002,], [0.009,0.0016,0.0026,0.0051,0.0007,0.0004,0.0018,0.0052,0.0008,0.0041,0,-0.0002,0.0015,0.0044,0.0,0.0043,0.003,0.0006,0.0021,0.0082,0.0022,0.0059,0.0038,0.0033,0.0055,0.0013,0.0055,0.0009,0.0009,0.002,0.0028,], [0.0018,0.0035,0.008,0.0149,0.0015,0.0009,0.0043,0.0139,0.0004,0.0031,0.0002,0,0.0045,0.0034,0.0002,0.0115,0.0064,0.0017,0.0079,0.0134,0.0042,0.012,0.0117,0.0088,0.0078,0.0009,0.0118,0.0048,0.0006,0.0063,0.0238,], [-0.0002,-0.0007,0.0045,0.0075,-0.0014,-0.0014,0.0002,0.0075,-0.0014,0.0003,-0.0012,-0.0047,0,0.0005,-0.0016,0.0053,0.0035,-0.0017,0.0007,0.0046,0.0005,0.0052,0.007,0.0067,0.003,-0.0014,0.0029,-0.0015,-0.0012,0.0009,0.0013,], [-0.0015,-0.001,0.0006,0.0043,-0.0018,-0.0018,-0.0002,0.0054,-0.0031,-0.0012,-0.0044,-0.0034,-0.0005,0,-0.0045,0.0026,0.0018,-0.002,0.0,0.007,0.0001,0.0082,0.0024,0.0019,0.0079,-0.0078,0.0033,-0.0015,-0.0096,0.0001,0.0001,], [0.009,0.0016,0.0026,0.0051,0.0007,0.0004,0.0018,0.0052,0.0006,0.0041,0.0,-0.0002,0.0015,0.0045,0,0.0043,0.003,0.0008,0.0021,0.0084,0.0022,0.0059,0.0039,0.0033,0.0055,0.0013,0.0058,0.0009,0.001,0.002,0.0028,], [-0.0029,-0.0064,-0.0044,-0.0012,-0.0066,-0.0057,-0.0064,-0.0007,-0.0041,-0.0026,-0.0042,-0.0111,-0.0052,-0.0026,-0.0043,0,-0.0017,-0.0063,-0.0158,-0.0005,-0.0049,-0.0006,-0.0026,-0.0027,-0.0016,-0.0041,-0.0022,-0.0141,-0.0042,-0.0285,-0.0057,], [-0.0021,-0.0028,-0.0036,0.003,-0.0034,-0.0031,-0.0018,0.0043,-0.0026,-0.0022,-0.0032,-0.008,-0.0043,-0.0028,-0.0032,0.0019,0,-0.0038,-0.0021,0.0018,-0.0013,0.0023,-0.0004,-0.0017,0.0,-0.0041,-0.0003,-0.0041,-0.0045,-0.002,-0.0034,], [0.0012,0.0038,0.003,0.0056,0.0009,-0.0003,0.0031,0.0055,-0.0004,0.0019,-0.0007,-0.0016,0.0016,0.0021,-0.0007,0.0061,0.0034,0,0.003,0.0089,0.0039,0.0064,0.0047,0.0039,0.0052,0.0001,0.0061,0.0008,-0.0002,0.0026,0.004,], [-0.0006,-0.0021,0.0007,0.0039,-0.0032,-0.0028,-0.0007,0.0038,-0.0019,-0.0001,-0.0021,-0.0079,-0.0007,0.0,-0.0021,0.0165,0.0018,-0.003,0,0.004,0.0002,0.0036,0.0026,0.002,0.002,-0.0018,0.0023,-0.01,-0.0019,0.0007,0.0003,], [-0.0048,-0.007,-0.0047,-0.0014,-0.0074,-0.0062,-0.0042,-0.0005,-0.0072,-0.0055,-0.0074,-0.015,-0.0052,-0.0055,-0.0077,0.0005,-0.0017,-0.0087,-0.0042,0,-0.0035,-0.0008,-0.0033,-0.0033,-0.005,-0.0115,-0.0229,-0.0074,-0.0095,-0.0035,-0.007,], [-0.0008,-0.0031,0.0003,0.0023,-0.0046,-0.0039,-0.0036,0.0024,-0.0022,-0.0001,-0.0024,-0.004,-0.0005,-0.0001,-0.0024,0.005,0.0012,-0.0038,-0.0002,0.0035,0,0.0027,0.0015,0.0011,0.0016,-0.0019,0.0017,-0.0035,-0.0019,0.0,0.0,], [-0.0042,-0.0052,-0.0049,-0.0011,-0.0057,-0.005,-0.0033,0.0,-0.0054,-0.0073,-0.0059,-0.0127,-0.0049,-0.0082,-0.006,0.0007,-0.002,-0.0065,-0.0036,0.0006,-0.0027,0,-0.0034,-0.0035,-0.01,-0.0106,-0.0041,-0.0064,-0.009,-0.0031,-0.0057,], [-0.0019,-0.0036,-0.0093,0.01,-0.0042,-0.0037,-0.0021,0.0062,-0.0035,-0.0024,-0.0037,-0.0133,-0.0064,-0.0024,-0.0038,0.0025,0.0002,-0.0048,-0.0028,0.0031,-0.0015,0.0035,0,-0.0025,0.0002,-0.0051,-0.0002,-0.0056,-0.0048,-0.0025,-0.0061,], [-0.0017,-0.0028,-0.0077,0.0072,-0.0034,-0.0031,-0.0016,0.0076,-0.003,-0.002,-0.0032,-0.009,-0.0062,-0.002,-0.0033,0.0027,0.0017,-0.0039,-0.002,0.003,-0.0011,0.0034,0.0025,0,0.0007,-0.004,0.0003,-0.0042,-0.0033,-0.002,-0.0034,], [-0.0033,-0.0036,-0.0022,0.0022,-0.0042,-0.0037,-0.0018,0.0032,-0.0048,-0.0065,-0.0042,-0.0082,-0.0028,-0.0076,-0.0052,0.0016,0.0,-0.0048,-0.0019,0.0047,-0.0016,0.0092,-0.0002,-0.0007,0,-0.0105,-0.0006,-0.0041,-0.009,-0.0017,-0.0028,], [0.0024,0.001,0.0027,0.007,0.0,-0.0002,0.0014,0.0071,-0.0008,0.0065,-0.0013,-0.0011,0.0014,0.0078,-0.0013,0.0041,0.0034,-0.0001,0.0017,0.012,0.0017,0.0104,0.0049,0.004,0.0105,0,0.0078,0.0004,-0.003,0.0017,0.0024,], [-0.003,-0.0048,-0.0022,0.0024,-0.0055,-0.0047,-0.0022,0.0028,-0.0052,-0.0032,-0.0055,-0.0121,-0.0032,-0.0029,-0.0057,0.0021,0.0002,-0.0066,-0.0022,0.0229,-0.0018,0.0041,0.0002,-0.0003,0.0006,-0.0079,0,-0.0053,-0.0067,-0.0018,-0.0038,], [0.0006,0.001,0.0029,0.0058,-0.0007,-0.0008,0.0041,0.0059,-0.0007,0.0014,-0.0009,-0.0034,0.0015,0.0015,-0.0009,0.0145,0.0032,-0.0008,0.0121,0.0071,0.004,0.0065,0.0047,0.0038,0.0042,-0.0004,0.0054,0,-0.0006,0.0067,0.0043,], [0.0043,0.0011,0.0028,0.0067,0.0003,0.0001,0.0015,0.0069,-0.0003,0.0082,-0.0009,-0.0007,0.0015,0.0096,-0.001,0.0041,0.0037,0.0002,0.0019,0.0108,0.0018,0.0087,0.0048,0.0032,0.0091,0.003,0.0071,0.0006,0,0.0018,0.0025,], [-0.0007,-0.0018,0.0006,0.0038,-0.0028,-0.0025,-0.0007,0.0037,-0.0019,-0.0001,-0.002,-0.0058,-0.0009,-0.0001,-0.0021,0.0285,0.0018,-0.0028,-0.0008,0.0035,0.0,0.0032,0.0027,0.002,0.0017,-0.0017,0.0019,-0.0067,-0.0018,0,0.0,], [-0.0009,-0.0022,0.0012,0.0079,-0.0033,-0.0028,-0.0005,0.0071,-0.0025,-0.0002,-0.0027,-0.031,-0.0013,-0.0001,-0.0028,0.0057,0.0027,-0.004,-0.0003,0.0065,0.0,0.0057,0.0057,0.0035,0.0028,-0.0024,0.0038,-0.0047,-0.0025,0.0,0,],]
+
+# demand to unload at each node. 
+const demand_weight_kg = [ 0.0, 0.330693, 90.7184, 22.6796, 27.2155, 27.2155, 54.4311, 4.53592, 0.330693, 1.1, 90.7185, 31.7515, 0.907185, 49.8952, 45.3592, 40.8233, 3.62874, 113.398, 13.6078, 77.1107, 3.17515, 56.699, 90.7185, 3.62874, 49.8952, 90.7184, 22.6796, 0.330693, 113.398, 0.330693, 45.3592,]
+
+# the time needed for each node to unload the required cargo
+const delivery_time_minute = [ 0, 5, 16, 7, 7, 10, 15, 7, 5, 5, 25, 15, 5, 8, 18, 15, 10, 25, 8, 15, 5, 15, 22, 10, 8, 18, 10, 5, 25, 5, 20,]
+
+# delivery_time_minute
+#  not before 0.27083333 means not before 0.27083333*24=6.50=6H30
+const not_before_part_of_24H = [ 0.0, 0.270833333, 0.208333333, 0.208333333, 0.270833333, 0.270833333, 0.208333333, 0.208333333, 0.208333333, 0.333333333, 0.208333333, 0.208333333, 0.208333333, 0.208333333, 0.208333333, 0.416666667, 0.208333333, 0.270833333, 0.416666667, 0.208333333, 0.208333333, 0.208333333, 0.458333333, 0.208333333, 0.208333333, 0.208333333, 0.208333333, 0.583333333, 0.208333333, 0.416666667, 0.208333333,];
+const not_after_part_of_24H = [ 0.0, 0.375, 0.5, 0.708333333, 0.375, 0.458333333, 0.708333333, 0.541666667, 0.708333333, 0.75, 0.708333333, 0.708333333, 0.5, 0.708333333, 0.708333333, 0.708333333, 0.708333333, 0.458333333, 0.708333333, 0.708333333, 0.708333333, 0.708333333, 0.625, 0.541666667, 0.708333333, 0.645833333, 0.666666667, 0.708333333, 0.666666667, 0.625, 0.520833333,];
+
+IMPORTANT : the load of the truck passed in the function fuel_consumption is the load of sum of all the demand_weight minus what has been delivered before.
+
+
+IMPORTANT : you will follow the following Draft Algorithm and Library Calls (Python)
+The core of your solution is decoupling the problem. The main algorithm (ALNS) will optimize the tour sequence. For each arc in that sequence, a sub-algorithm will optimize the speed.
+
+Prerequisite: Your CO2 Model
+You must first have a function that models your CO2 emissions. This is the "secret sauce" and is critical. It would look like this:
+
+Python
+
+# This is a hypothetical model. You must get a realistic one
+# based on vehicle physics.
+class CO2Model:
+    def calculate_kg(self, distance_km, speed_kmh, load_kg, gradient_percent):
+        # A realistic model would be non-linear.
+        # Example: base_rate(speed) * load_factor(load) * gradient_factor(gradient) * distance
+        # For this draft, we'll use a placeholder.
+        base_emission_per_km = 0.5 + (speed_kmh - 30)**2 / 100 
+        load_factor = 1 + (load_kg / 1000) # e.g., 1000kg max load
+        gradient_factor = 1 + (gradient_percent / 10)
+        
+        # Total CO2 in kg for this arc
+        return (base_emission_per_km * load_factor * gradient_factor) * distance_km
+
+Step 1: The Arc Cost & Speed Sub-ProblemFor any arc $(i, j)$ and a given current_load, we must find the optimal speed $v \in [20, 40]$ that minimizes CO2. We use scipy.optimize.minimize_scalar for this.Pythonfrom scipy.optimize import minimize_scalar
+
+def get_optimal_arc_cost(from_node, to_node, current_load):
+    """
+    Finds the minimum CO2 cost for a single arc (i, j) by
+    optimizing the speed.
+    """
+    distance = distance_matrix[from_node][to_node]
+    gradient = gradient_matrix[from_node][to_node]
+    
+    # This is the objective function for the speed optimizer
+    def co2_objective_for_speed(speed_kmh):
+        return co2_model.calculate_kg(
+            distance_km=distance,
+            speed_kmh=speed_kmh,
+            load_kg=current_load,
+            gradient_percent=gradient
+        )
+
+    # Solve the 1D optimization problem
+    result = minimize_scalar(
+        co2_objective_for_speed,
+        method='bounded',
+        bounds=(20, 40) # The speed constraint
+    )
+    
+    # result.fun is the minimum CO2 (in kg) for this arc
+    return result.fun
+Step 2: The Tour Cost Evaluation FunctionThis is the main objective function for the ALNS algorithm. It takes a complete tour and calculates its total CO2 cost by summing the optimal costs of its arcs.Pythondef evaluate_tour_cost(tour_permutation):
+    """
+    Calculates the total CO2 cost for an entire tour permutation.
+    e.g., tour_permutation = [0, 5, 12, 2, ..., 30, 0]
+    """
+    total_co2 = 0
+    current_load = total_demand  # Start with a full truck
+
+    for i in range(len(tour_permutation) - 1):
+        node_A = tour_permutation[i]
+        node_B = tour_permutation[i+1]
+        
+        # Call our arc-cost solver from Step 1
+        optimal_arc_co2 = get_optimal_arc_cost(node_A, node_B, current_load)
+        
+        total_co2 += optimal_arc_co2
+        
+        # Update the load for the *next* arc
+        current_load -= demands[node_B]
+        
+    return total_co2
+Step 3: The ALNS Algorithm Draft (using alns library)Now we plug these functions into the alns library.Python# Install with: pip install alns numpy scipy
+import numpy as np
+import random
+from alns import ALNS, State
+from alns.accept import RecordToRecordTravel
+from alns.stop import MaxIterations
+from alns.weights import SimpleWeights
+
+# 1. Define our "State" object
+class TourState(State):
+    
+    def __init__(self, tour):
+        # tour is a list of nodes, e.g. [0, 1, 2, ..., 30, 0]
+        self.tour = tour
+    
+    def objective(self):
+        # The ALNS library calls this to get the cost
+        # This is where our expensive, state-dependent
+        # evaluation happens.
+        return evaluate_tour_cost(self.tour)
+    
+    def copy(self):
+        return TourState(self.tour.copy())
+
+# 2. Define Destroy and Repair operators (example)
+def random_destroy(state, random_state):
+    """
+    Removes 20% of customers from the tour.
+    """
+    tour_no_depot = state.tour[1:-1]
+    n_to_remove = max(1, int(len(tour_no_depot) * 0.2))
+    
+    removed_nodes = []
+    for _ in range(n_to_remove):
+        idx = random_state.randint(0, len(tour_no_depot) - 1)
+        removed_nodes.append(tour_no_depot.pop(idx))
+    
+    new_state = TourState([0] + tour_no_depot + [0])
+    return new_state, removed_nodes
+
+def greedy_repair(state, removed_nodes, random_state):
+    """
+    Re-inserts removed nodes one by one at the best (lowest CO2) position.
+    """
+    for node in removed_nodes:
+        best_cost = float('inf')
+        best_idx = -1
+        
+        # Try inserting 'node' into every possible position
+        for idx in range(1, len(state.tour)):
+            test_tour = state.tour[:idx] + [node] + state.tour[idx:]
+            
+            # This is slow, but correct. It re-evaluates the
+            # ENTIRE tour. A faster way is "delta-evaluation".
+            test_cost = evaluate_tour_cost(test_tour)
+            
+            if test_cost < best_cost:
+                best_cost = test_cost
+                best_idx = idx
+        
+        # Insert at the best found position
+        state.tour.insert(best_idx, node)
+        
+    return state
+
+# 3. Run the ALNS algorithm
+if __name__ == "__main__":
+    # --- Load your data here ---
+    # distance_matrix, gradient_matrix, demands, total_demand
+    # ...
+    
+    # Create an initial solution (e.g., random order)
+    initial_nodes = list(range(1, 31))
+    random.shuffle(initial_nodes)
+    initial_tour = [0] + initial_nodes + [0]
+    initial_state = TourState(initial_tour)
+    
+    # Initialize ALNS
+    alns = ALNS(random.RandomState(1234)) # Seed
+    
+    # Add operators
+    alns.add_destroy_operator(random_destroy)
+    # (add more destroy operators... e.g., worst_removal)
+    alns.add_repair_operator(greedy_repair)
+    # (add more repair operators... e.g., regret_insertion)
+
+    # Set selection, acceptance, and stopping criteria
+    weights = SimpleWeights([1], [1], decay=0.8)
+    accept = RecordToRecordTravel(start_prob=0.1, end_prob=0.001, step=0.01)
+    stop = MaxIterations(1000) # 1000 iterations
+    
+    print("Starting ALNS... (This may take a few minutes)")
+    
+    # Run the search
+    result = alns.iterate(initial_state, weights, accept, stop)
+
+    # Get the best solution
+    best_solution = result.best_state
+    best_cost = best_solution.objective()
+    
+    print(f"Best tour found: {best_solution.tour}")
+    print(f"Best CO2 (kg): {best_cost:.2f}")
+    
+    if best_cost <= 45:
+        print(f"✅ Success! Target of 45kg met. (Baseline: 50kg)")
+    else:
+        print(f"❌ Target not met. Best found was {best_cost:.2f}kg.")
