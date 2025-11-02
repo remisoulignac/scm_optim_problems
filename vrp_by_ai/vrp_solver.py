@@ -14,6 +14,22 @@ from alns.stop import MaxIterations
 import time
 
 # ============================================================================
+# CONSTANTS AND UTILITY FUNCTIONS
+# ============================================================================
+
+HEADER_SEP = "=" * 70
+SUB_SEP = "-" * 70
+START_TIME_MINUTES = 420  # 07:00 (7 * 60 = 420 minutes from midnight)
+
+def format_time(minutes):
+    """Convert minutes to HH:MM string format"""
+    return f"{int(minutes//60):02d}:{int(minutes%60):02d}"
+
+def convert_time_windows(not_before, not_after):
+    """Convert time windows from 24H fraction to minutes"""
+    return [(nb * 24 * 60, na * 24 * 60) for nb, na in zip(not_before, not_after)]
+
+# ============================================================================
 # FUEL CONSUMPTION MODEL (Physics-based CO2 Emission Model)
 # ============================================================================
 
@@ -159,14 +175,7 @@ def load_data():
     # Convert time windows from part of 24H to minutes
     not_before = namespace['not_before_part_of_24H']
     not_after = namespace['not_after_part_of_24H']
-    
-    time_window_min_max_minute = []
-    for i in range(len(not_before)):
-        tw_start = not_before[i] * 24 * 60  # Convert to minutes
-        tw_end = not_after[i] * 24 * 60     # Convert to minutes
-        time_window_min_max_minute.append((tw_start, tw_end))
-    
-    data['time_window_min_max_minute'] = time_window_min_max_minute
+    data['time_window_min_max_minute'] = convert_time_windows(not_before, not_after)
     data['delivery_time_minute'] = namespace['delivery_time_minute']
     
     return data
@@ -215,7 +224,7 @@ def get_optimal_arc_cost(from_node, to_node, current_load):
                 load_kg=current_load,
                 slope_gradient=gradient  # Gradient as decimal (not percentage)
             )
-        except Exception as e:
+        except Exception:
             # Return large penalty if calculation fails
             return float('inf')
     
@@ -230,16 +239,12 @@ def get_optimal_arc_cost(from_node, to_node, current_load):
         # Check if optimization was successful
         if result.success and result.fun != float('inf'):
             return result.fun, result.x
-        else:
-            # Fallback: use middle speed
-            speed = 30
-            return co2_objective_for_speed(speed), speed
-            
-    except Exception as e:
-        # Fallback calculation with default speed
-        speed = 30
-        co2 = co2_objective_for_speed(speed)
-        return co2, speed
+    except Exception:
+        pass
+    
+    # Single fallback path for all error cases
+    speed = 30
+    return co2_objective_for_speed(speed), speed
 
 
 def evaluate_tour_cost(tour_permutation, return_details=False, max_violations=0, violation_penalty=1000.0, for_objective=True):
@@ -259,7 +264,7 @@ def evaluate_tour_cost(tour_permutation, return_details=False, max_violations=0,
     """
     pure_co2 = 0
     current_load = total_demand  # Start with full truck
-    current_time = 420  # Start at 07:00 (7 * 60 = 420 minutes)
+    current_time = START_TIME_MINUTES
     arc_details = []
     violation_count = 0
     violated_nodes = []
@@ -576,23 +581,32 @@ def create_time_window_aware_solution():
     return tour
 
 
-def format_comprehensive_schedule(tour, arc_details, violated_nodes):
+def display_solution_schedule(tour, arc_details, violated_nodes, indent="    "):
     """
-    Create a comprehensive schedule combining arc details and delivery information.
-    Returns a list of strings for printing/saving.
+    Display comprehensive schedule with arc details and delivery information.
+    Unified function for console output and file writing.
+    
+    Args:
+        tour: Tour sequence
+        arc_details: List of arc detail dictionaries
+        violated_nodes: List of nodes with time window violations
+        indent: String prefix for each line (default "    " for console)
+    
+    Returns:
+        List of formatted strings
     """
     lines = []
-    lines.append("    Complete Schedule:")
-    lines.append("    " + "-"*130)
-    lines.append(f"    {'From':>4} {'To':>4} {'Dist':>7} {'Speed':>7} {'Load':>8} {'CO2':>8} {'Arrival':>9} {'Delivery':>9} {'Duration':>9} {'Time Window':>18} {'Status':>10}")
-    lines.append(f"    {'':>4} {'':>4} {'(km)':>7} {'(km/h)':>7} {'(kg)':>8} {'(kg)':>8} {'(time)':>9} {'(time)':>9} {'(min)':>9} {'':>18} {'':>10}")
-    lines.append("    " + "-"*130)
+    lines.append(f"{indent}Complete Schedule:")
+    lines.append(f"{indent}" + "-"*130)
+    lines.append(f"{indent}{'From':>4} {'To':>4} {'Dist':>7} {'Speed':>7} {'Load':>8} {'CO2':>8} {'Arrival':>9} {'Delivery':>9} {'Duration':>9} {'Time Window':>18} {'Status':>10}")
+    lines.append(f"{indent}{'':>4} {'':>4} {'(km)':>7} {'(km/h)':>7} {'(kg)':>8} {'(kg)':>8} {'(time)':>9} {'(time)':>9} {'(min)':>9} {'':>18} {'':>10}")
+    lines.append(f"{indent}" + "-"*130)
     
-    current_time = 420  # Start at 07:00 (7 * 60 = 420 minutes)
+    current_time = START_TIME_MINUTES
     violated_set = set(violated_nodes)
     
     # Depot start
-    lines.append(f"    {'-':>4} {0:>4} {'-':>7} {'-':>7} {'-':>8} {'-':>8} {'07:00':>9} {'-':>9} {'-':>9} {'-':>18} {'DEPOT':>10}")
+    lines.append(f"{indent}{'-':>4} {0:>4} {'-':>7} {'-':>7} {'-':>8} {'-':>8} {format_time(START_TIME_MINUTES):>9} {'-':>9} {'-':>9} {'-':>18} {'DEPOT':>10}")
     
     for i in range(len(tour) - 1):
         from_node = tour[i]
@@ -608,7 +622,7 @@ def format_comprehensive_schedule(tour, arc_details, violated_nodes):
         current_time += travel_time
         
         if to_node == 0:  # Return to depot
-            lines.append(f"    {from_node:>4} {0:>4} {distance_km:>7.2f} {speed_kmh:>7.1f} {load_kg:>8.1f} {co2_kg:>8.4f} {f'{int(current_time//60):02d}:{int(current_time%60):02d}':>9} {'-':>9} {'-':>9} {'-':>18} {'DEPOT':>10}")
+            lines.append(f"{indent}{from_node:>4} {0:>4} {distance_km:>7.2f} {speed_kmh:>7.1f} {load_kg:>8.1f} {co2_kg:>8.4f} {format_time(current_time):>9} {'-':>9} {'-':>9} {'-':>18} {'DEPOT':>10}")
         else:
             # Get time window
             tw_start, tw_end = time_window_min_max_minute[to_node]
@@ -627,17 +641,17 @@ def format_comprehensive_schedule(tour, arc_details, violated_nodes):
                 status = "✓ ON-TIME"
             
             # Format
-            arrival_str = f"{int(arrival_time//60):02d}:{int(arrival_time%60):02d}"
-            delivery_time_str = f"{int(current_time//60):02d}:{int(current_time%60):02d}"
+            arrival_str = format_time(arrival_time)
+            delivery_time_str = format_time(current_time)
             delivery_duration = delivery_time_minutes[to_node]
-            tw_str = f"{int(tw_start//60):02d}:{int(tw_start%60):02d}-{int(tw_end//60):02d}:{int(tw_end%60):02d}"
+            tw_str = f"{format_time(tw_start)}-{format_time(tw_end)}"
             
-            lines.append(f"    {from_node:>4} {to_node:>4} {distance_km:>7.2f} {speed_kmh:>7.1f} {load_kg:>8.1f} {co2_kg:>8.4f} {arrival_str:>9} {delivery_time_str:>9} {delivery_duration:>9} {tw_str:>18} {status:>10}")
+            lines.append(f"{indent}{from_node:>4} {to_node:>4} {distance_km:>7.2f} {speed_kmh:>7.1f} {load_kg:>8.1f} {co2_kg:>8.4f} {arrival_str:>9} {delivery_time_str:>9} {delivery_duration:>9} {tw_str:>18} {status:>10}")
             
             # Add delivery time
             current_time += delivery_duration
     
-    lines.append("    " + "-"*130)
+    lines.append(f"{indent}" + "-"*130)
     return lines
 
 
@@ -658,9 +672,9 @@ def sanity_check():
     global co2_model, distance_matrix, slope_matrix, demands, total_demand
     global time_window_min_max_minute, delivery_time_minutes
     
-    print("="*70)
+    print(HEADER_SEP)
     print("SANITY CHECK - SEQUENTIAL TOUR AT 25 KM/H")
-    print("="*70)
+    print(HEADER_SEP)
     
     # Initialize CO2 model
     co2_model = CO2Model()
@@ -681,14 +695,14 @@ def sanity_check():
     total_co2 = 0
     total_distance = 0
     current_load = total_demand
-    current_time = 7 * 60  # Start at 07:00 (420 minutes from midnight)
+    current_time = START_TIME_MINUTES
     
     on_time_count = 0
     late_count = 0
     
     print("\nID Order | Delivery Time | Delivery Windows | Status")
-    print("-" * 70)
-    print(f"{'DC':>8} | {current_time//60:02d}:{current_time%60:02d}          |              |")
+    print(SUB_SEP)
+    print(f"{'DC':>8} | {format_time(current_time)}          |              |")
     
     for i in range(len(tour) - 1):
         node_A = tour[i]
@@ -717,9 +731,7 @@ def sanity_check():
             tw_start, tw_end = time_window_min_max_minute[node_B]
             
             # Format time windows
-            tw_start_str = f"{int(tw_start//60):02d}:{int(tw_start%60):02d}"
-            tw_end_str = f"{int(tw_end//60):02d}:{int(tw_end%60):02d}"
-            tw_window = f"{tw_start_str}-{tw_end_str}"
+            tw_window = f"{format_time(tw_start)}-{format_time(tw_end)}"
             
             # Wait if arrived too early
             arrival_time = current_time
@@ -735,7 +747,7 @@ def sanity_check():
                 late_count += 1
             
             # Format delivery time
-            delivery_time_str = f"{int(current_time//60):02d}:{int(current_time%60):02d}"
+            delivery_time_str = format_time(current_time)
             
             print(f"{node_B:>8} | {delivery_time_str}          | {tw_window:12} | {status}")
             
@@ -746,10 +758,10 @@ def sanity_check():
             current_load -= demands[node_B]
         else:
             # Return to depot
-            return_time_str = f"{int(current_time//60):02d}:{int(current_time%60):02d}"
+            return_time_str = format_time(current_time)
             print(f"{'DC':>8} | {return_time_str}          |              |")
     
-    print("-" * 70)
+    print(SUB_SEP)
     
     # Calculate on-time percentage
     on_time_percentage = (on_time_count / 30) * 100
@@ -784,14 +796,14 @@ def sanity_check():
     ontime_match = "✓ MATCH" if ontime_diff < 1 else f"✗ DIFF: {ontime_diff:.0f}%"
     print(f"On-time:     {ontime_match}")
     
-    print("\n" + "="*70)
+    print("\n" + HEADER_SEP)
     
     if distance_diff < 0.5 and co2_diff < 1.0 and ontime_diff < 1:
         print("✓ SANITY CHECK PASSED - Implementation is correct!")
     else:
         print("⚠ SANITY CHECK FAILED - Please review the implementation")
     
-    print("="*70 + "\n")
+    print(HEADER_SEP + "\n")
     
     return {
         'on_time_percentage': on_time_percentage,
@@ -831,9 +843,9 @@ def solve_vrp(max_iterations=2000, random_seed=1234, sanity_check_only=False,
     max_time_window_violations = max_violations
     time_window_violation_penalty = violation_penalty
     
-    print("="*70)
+    print(HEADER_SEP)
     print("CO2-OPTIMIZED VEHICLE ROUTING PROBLEM SOLVER")
-    print("="*70)
+    print(HEADER_SEP)
     
     # Initialize CO2 model
     co2_model = CO2Model()
@@ -860,9 +872,9 @@ def solve_vrp(max_iterations=2000, random_seed=1234, sanity_check_only=False,
     print(f"  - Max distance: {distance_matrix.max():.3f} km")
     
     # Create initial solutions and pick the best
-    print("\n" + "-"*70)
+    print("\n" + SUB_SEP)
     print("CREATING INITIAL SOLUTION")
-    print("-"*70)
+    print(SUB_SEP)
     
     initial_tour_nn = create_nearest_neighbor_solution()
     initial_cost_nn = evaluate_tour_cost(initial_tour_nn)
@@ -881,26 +893,20 @@ def solve_vrp(max_iterations=2000, random_seed=1234, sanity_check_only=False,
     print(f"  Random:               {initial_cost_random:.3f} kg CO2")
     
     # Pick best initial solution
-    if initial_cost_nn <= initial_cost_tw and initial_cost_nn <= initial_cost_random:
-        initial_tour = initial_tour_nn
-        initial_cost = initial_cost_nn
-        method = "Nearest Neighbor"
-    elif initial_cost_tw <= initial_cost_random:
-        initial_tour = initial_tour_tw
-        initial_cost = initial_cost_tw
-        method = "Time Window Aware"
-    else:
-        initial_tour = initial_tour_random
-        initial_cost = initial_cost_random
-        method = "Random"
+    solutions = [
+        (initial_cost_nn, initial_tour_nn, "Nearest Neighbor"),
+        (initial_cost_tw, initial_tour_tw, "Time Window Aware"),
+        (initial_cost_random, initial_tour_random, "Random")
+    ]
+    initial_cost, initial_tour, method = min(solutions, key=lambda x: x[0])
     
     print(f"\n✓ Selected initial solution: {method}")
     print(f"  Initial CO2: {initial_cost:.3f} kg")
     
     # Initialize ALNS
-    print("\n" + "-"*70)
+    print("\n" + SUB_SEP)
     print("RUNNING ALNS OPTIMIZATION")
-    print("-"*70)
+    print(SUB_SEP)
     
     initial_state = TourState(initial_tour)
     alns = ALNS(np.random.default_rng(random_seed))
@@ -977,43 +983,9 @@ def solve_vrp(max_iterations=2000, random_seed=1234, sanity_check_only=False,
         
         print(f"  Iter {iteration[0]:4d}: New best = {pure_co2:.3f} kg CO2 (↓ {improvement:.3f} kg, {improvement_pct:.2f}%) | On-time: {on_time_pct:.0f}% ({on_time_count}/30)")
         
-        # Display the complete solution with speeds (non-truncated)
-        tour = state.tour
-        print(f"    Complete Route:")
-        current_load = total_demand
-        
-        # Build complete route with node IDs and speeds
-        route_parts = []
-        for i in range(len(tour) - 1):
-            from_node = tour[i]
-            to_node = tour[i + 1]
-            _, optimal_speed = get_optimal_arc_cost(from_node, to_node, current_load)
-            route_parts.append(f"{to_node}@{optimal_speed:.1f}km/h")
-            
-            # Update load
-            if to_node != 0:
-                current_load -= demands[to_node]
-        
-        # Print complete route (non-truncated) with line breaks for readability
-        route_str = " → ".join(route_parts)
-        # Break into lines of ~100 characters for better readability
-        line_length = 100
-        words = route_str.split(" → ")
-        current_line = "    "
-        for i, word in enumerate(words):
-            if len(current_line) + len(word) + 3 > line_length and current_line != "    ":
-                print(current_line)
-                current_line = "    → " + word
-            else:
-                if current_line == "    ":
-                    current_line += word
-                else:
-                    current_line += " → " + word
-        if current_line != "    ":
-            print(current_line)
-        
         # Display comprehensive schedule
-        schedule_lines = format_comprehensive_schedule(tour, arc_details, violated_nodes)
+        tour = state.tour
+        schedule_lines = display_solution_schedule(tour, arc_details, violated_nodes)
         for line in schedule_lines:
             print(line)
         
@@ -1042,9 +1014,9 @@ def solve_vrp(max_iterations=2000, random_seed=1234, sanity_check_only=False,
     
     print("  " + "-"*66)
     print(f"  Final iteration: {max_iterations}")
-    print("\n" + "="*70)
+    print("\n" + HEADER_SEP)
     print("OPTIMIZATION COMPLETE")
-    print("="*70)
+    print(HEADER_SEP)
     print(f"\n  Computation time: {end_time - start_time:.2f} seconds")
     print(f"  Iterations completed: {max_iterations}")
     print(f"  Last improvement at iteration: {last_improvement[0]}")
@@ -1107,34 +1079,26 @@ def solve_vrp(max_iterations=2000, random_seed=1234, sanity_check_only=False,
 
 def print_detailed_solution(solution):
     """
-    Print detailed arc-by-arc solution.
+    Print detailed solution with comprehensive schedule.
     """
-    print("\n" + "="*70)
+    print("\n" + HEADER_SEP)
     print("DETAILED SOLUTION")
-    print("="*70)
+    print(HEADER_SEP)
     
-    print("\n{:>4} {:>4} {:>10} {:>8} {:>10} {:>10} {:>12}".format(
-        "From", "To", "Dist(km)", "Speed", "Load(kg)", "CO2(kg)", "Arrival(min)"
-    ))
-    print("-"*70)
+    # Use unified display function (no indent for final display)
+    schedule_lines = display_solution_schedule(
+        solution['tour'], 
+        solution['arc_details'], 
+        solution['violated_nodes'],
+        indent=""
+    )
+    for line in schedule_lines:
+        print(line)
     
-    for arc in solution['arc_details']:
-        print("{:4d} {:4d} {:10.3f} {:8.1f} {:10.1f} {:10.4f} {:12.1f}".format(
-            arc['from'],
-            arc['to'],
-            arc['distance_km'],
-            arc['speed_kmh'],
-            arc['load_kg'],
-            arc['co2_kg'],
-            arc['arrival_time']
-        ))
-    
-    print("-"*70)
-    print("{:>32} {:10.1f} {:10.4f}".format(
-        "TOTALS:",
-        solution['total_distance_km'],
-        solution['co2_kg']
-    ))
+    # Summary
+    print(f"\nTOTALS:")
+    print(f"  Distance: {solution['total_distance_km']:.2f} km")
+    print(f"  CO2:      {solution['co2_kg']:.3f} kg")
 
 
 # ============================================================================
@@ -1171,78 +1135,45 @@ if __name__ == "__main__":
     # Print detailed solution (skip if sanity check only)
     if not args.sanity_check:
         print_detailed_solution(solution)
-    
-    # Save solution to file
-    print("\n" + "="*70)
-    print("SAVING SOLUTION")
-    print("="*70)
-    
-    # Calculate node list with speeds
-    tour = solution['tour']
-    current_load = total_demand
-    node_speed_list = []
-    
-    for i in range(len(tour) - 1):
-        from_node = tour[i]
-        to_node = tour[i + 1]
-        _, optimal_speed = get_optimal_arc_cost(from_node, to_node, current_load)
-        node_speed_list.append(f"{to_node}@{optimal_speed:.1f}km/h")
         
-        # Update load
-        if to_node != 0:
-            current_load -= demands[to_node]
-    
-    with open('solution.txt', 'a', encoding='utf-8') as f:
-        f.write("\n" + "="*70 + "\n")
-        f.write("CO2-OPTIMIZED VEHICLE ROUTING PROBLEM SOLUTION\n")
-        f.write("="*70 + "\n\n")
-        f.write(f"Date: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"Random Seed: {solution['random_seed']}\n")
-        f.write(f"Max Violations Allowed: {solution['max_violations']}\n")
-        f.write(f"Violation Penalty: {solution['violation_penalty']:.1f} kg CO2\n\n")
-        f.write(f"Total CO2 Emissions: {solution['co2_kg']:.3f} kg\n")
-        f.write(f"Total Distance: {solution['total_distance_km']:.2f} km\n")
-        f.write(f"Total Time: {solution['total_time_minutes']:.1f} minutes\n")
-        f.write(f"Computation Time: {solution['computation_time']:.2f} seconds\n")
-        f.write(f"Improvement over initial: {solution['improvement_percent']:.2f}%\n")
-        f.write(f"Target (45 kg): {'ACHIEVED ✓' if solution['co2_kg'] <= 45 else 'NOT MET ✗'}\n")
-        f.write(f"Violations: {solution['violation_count']}/30 customers\n")
-        f.write(f"On-time delivery: {100 - (solution['violation_count']/30*100):.0f}%\n\n")
+        # Save solution to file
+        print("\n" + HEADER_SEP)
+        print("SAVING SOLUTION")
+        print(HEADER_SEP)
         
-        f.write(f"Tour sequence (simple):\n")
-        f.write(f"{' -> '.join(map(str, solution['tour']))}\n\n")
+        tour = solution['tour']
         
-        f.write(f"Complete Route with Speeds:\n")
-        f.write("-"*70 + "\n")
-        # Print route in chunks of 80 characters for readability
-        route_str = " → ".join(node_speed_list)
-        line_length = 70
-        words = route_str.split(" → ")
-        current_line = ""
-        for word in words:
-            if len(current_line) + len(word) + 3 > line_length and current_line:
-                f.write(current_line + "\n")
-                current_line = "→ " + word
-            else:
-                if current_line:
-                    current_line += " → " + word
-                else:
-                    current_line = word
-        if current_line:
-            f.write(current_line + "\n")
-        f.write("-"*70 + "\n\n")
+        with open('solution.txt', 'a', encoding='utf-8') as f:
+            f.write("\n" + HEADER_SEP + "\n")
+            f.write("CO2-OPTIMIZED VEHICLE ROUTING PROBLEM SOLUTION\n")
+            f.write(HEADER_SEP + "\n\n")
+            f.write(f"Date: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Random Seed: {solution['random_seed']}\n")
+            f.write(f"Max Violations Allowed: {solution['max_violations']}\n")
+            f.write(f"Violation Penalty: {solution['violation_penalty']:.1f} kg CO2\n\n")
+            f.write(f"Total CO2 Emissions: {solution['co2_kg']:.3f} kg\n")
+            f.write(f"Total Distance: {solution['total_distance_km']:.2f} km\n")
+            f.write(f"Total Time: {solution['total_time_minutes']:.1f} minutes\n")
+            f.write(f"Computation Time: {solution['computation_time']:.2f} seconds\n")
+            f.write(f"Improvement over initial: {solution['improvement_percent']:.2f}%\n")
+            f.write(f"Target (45 kg): {'ACHIEVED ✓' if solution['co2_kg'] <= 45 else 'NOT MET ✗'}\n")
+            f.write(f"Violations: {solution['violation_count']}/30 customers\n")
+            f.write(f"On-time delivery: {100 - (solution['violation_count']/30*100):.0f}%\n\n")
+            
+            # Add comprehensive schedule with all details
+            schedule_lines = display_solution_schedule(
+                tour, 
+                solution['arc_details'], 
+                solution['violated_nodes'],
+                indent=""  # No indentation for file output
+            )
+            for line in schedule_lines:
+                f.write(line + "\n")
+            
+            f.write(f"\nOn-time deliveries: {30 - solution['violation_count']}/30 ({100 - (solution['violation_count']/30*100):.0f}%)\n")
+            if solution['violation_count'] > 0:
+                f.write(f"Late deliveries: {solution['violated_nodes']}\n")
+            f.write("\n")
         
-        # Add comprehensive schedule with all details
-        f.write("Complete Schedule (Arc Details + Delivery Information):\n")
-        f.write("="*70 + "\n")
-        schedule_lines = format_comprehensive_schedule(tour, solution['arc_details'], solution['violated_nodes'])
-        for line in schedule_lines:
-            f.write(line.replace("    ", "") + "\n")  # Remove console indentation for file
-        
-        f.write(f"\nOn-time deliveries: {30 - solution['violation_count']}/30 ({100 - (solution['violation_count']/30*100):.0f}%)\n")
-        if solution['violation_count'] > 0:
-            f.write(f"Late deliveries: {solution['violated_nodes']}\n")
-        f.write("\n")
-    
-    print("✓ Solution appended to 'solution.txt'")
-    print("\nDone!")
+        print("✓ Solution appended to 'solution.txt'")
+        print("\nDone!")
