@@ -289,15 +289,19 @@ def evaluate_tour_cost(tour_permutation, return_details=False, max_violations=0,
             
             # Check if arrived too early or too late
             arrival_time = current_time
-            if current_time < tw_start:
+            is_early = current_time < tw_start
+            is_late = current_time > tw_end
+
+            if is_early or is_late:
                 violation_count += 1
                 violated_nodes.append(node_B)
-                current_time = tw_start  # Wait until window opens
-            elif current_time > tw_end:
-                violation_count += 1
-                violated_nodes.append(node_B)
+
+            # If early, the truck must wait. The departure time is based on the window start.
+            if is_early:
+                current_time = tw_start  # Wait until the window opens
             
-            # Add delivery time
+            # Add delivery time. For late arrivals, this happens after the late arrival.
+            # For early arrivals, this happens after waiting for the window to open.
             current_time += delivery_time_minutes[node_B]
         
         pure_co2 += optimal_arc_co2
@@ -630,13 +634,10 @@ def display_solution_schedule(tour, arc_details, violated_nodes, indent="    "):
             # Wait if early
             arrival_time = current_time
             if current_time < tw_start:
-                current_time = tw_start
-            
-            # Check status
-            if arrival_time > tw_end:
-                status = "✗ LATE"
-            elif arrival_time < tw_start:
                 status = "✗ EARLY"
+                current_time = tw_start # wait
+            elif current_time > tw_end:
+                status = "✗ LATE"
             else:
                 status = "✓ ON-TIME"
             
@@ -981,7 +982,7 @@ def solve_vrp(max_iterations=2000, random_seed=1234, sanity_check_only=False,
         best_cost[0] = current_cost
         last_improvement[0] = iteration[0]
         
-        print(f"  Iter {iteration[0]:4d}: New best = {pure_co2:.3f} kg CO2 (↓ {improvement:.3f} kg, {improvement_pct:.2f}%) | On-time: {on_time_pct:.0f}% ({on_time_count}/30)")
+        print(f"  Iter {iteration[0]:4d}: New best = {pure_co2:.3f} kg CO2 | Cost: {current_cost:.3f} (↓ {improvement:.3f}, {improvement_pct:.2f}%) | On-time: {on_time_pct:.0f}% ({on_time_count}/30)")
         
         # Display comprehensive schedule
         tour = state.tour
