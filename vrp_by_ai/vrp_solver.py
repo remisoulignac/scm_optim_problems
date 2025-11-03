@@ -296,12 +296,8 @@ def evaluate_tour_cost(tour_permutation, return_details=False, max_violations=0,
                 violation_count += 1
                 violated_nodes.append(node_B)
 
-            # If early, the truck must wait. The departure time is based on the window start.
-            if is_early:
-                current_time = tw_start  # Wait until the window opens
-            
-            # Add delivery time. For late arrivals, this happens after the late arrival.
-            # For early arrivals, this happens after waiting for the window to open.
+            # Add delivery time immediately. The truck does not wait if early.
+            # It delivers and leaves, but the early/late arrival is counted as a violation.
             current_time += delivery_time_minutes[node_B]
         
         pure_co2 += optimal_arc_co2
@@ -390,46 +386,49 @@ def random_destroy(state, rng):
 
 def worst_removal(state, rng):
     """
-    Removes customers that contribute most to CO2 emissions.
-    Uses delta evaluation for better performance.
+    Removes customers that contribute most to the total objective cost,
+    including CO2 and time window violation penalties.
     """
     tour_no_depot = state.tour[1:-1].copy()
     n_to_remove = max(1, int(len(tour_no_depot) * 0.15))
-    
-    # Calculate removal cost delta for each customer (saving from removal)
+
+    if not tour_no_depot:
+        return state.copy(), []
+
+    # Calculate the total cost of the original tour
+    original_cost = evaluate_tour_cost(
+        state.tour,
+        max_violations=max_time_window_violations,
+        violation_penalty=time_window_violation_penalty
+    )
+
+    # Calculate removal cost delta for each customer
     customer_costs = []
-    current_load = total_demand
-    
-    for i in range(1, len(state.tour) - 1):
-        node_prev = state.tour[i - 1]
-        node_curr = state.tour[i]
-        node_next = state.tour[i + 1]
+    for node_to_remove in tour_no_depot:
+        # Create a temporary tour with the customer removed
+        temp_tour_list = [node for node in state.tour if node != node_to_remove]
         
-        # Cost of current arcs: prev -> curr and curr -> next
-        cost_prev_curr, _ = get_optimal_arc_cost(node_prev, node_curr, current_load)
-        cost_curr_next, _ = get_optimal_arc_cost(node_curr, node_next, current_load - demands[node_curr])
+        # Calculate the cost of the tour without this customer
+        cost_without_node = evaluate_tour_cost(
+            temp_tour_list,
+            max_violations=max_time_window_violations,
+            violation_penalty=time_window_violation_penalty
+        )
         
-        # Cost of direct arc: prev -> next (without curr)
-        cost_direct, _ = get_optimal_arc_cost(node_prev, node_next, current_load)
-        
-        # Saving from removing this customer
-        saving = cost_prev_curr + cost_curr_next - cost_direct
-        customer_costs.append((node_curr, saving))
-        
-        # Update load for next customer
-        current_load -= demands[node_curr]
+        # The "saving" is the reduction in total cost
+        saving = original_cost - cost_without_node
+        customer_costs.append((node_to_remove, saving))
     
     # Sort by saving (descending = highest cost contribution)
     customer_costs.sort(key=lambda x: x[1], reverse=True)
     
-    # Remove worst customers
-    removed_nodes = []
-    for i in range(min(n_to_remove, len(customer_costs))):
-        node = customer_costs[i][0]
-        removed_nodes.append(node)
-        tour_no_depot.remove(node)
+    # Identify the worst customers to remove
+    removed_nodes = [customer for customer, saving in customer_costs[:n_to_remove]]
     
-    new_state = TourState([0] + tour_no_depot + [0])
+    # Create the new tour by removing these customers
+    final_tour_list = [node for node in state.tour if node not in removed_nodes]
+    
+    new_state = TourState(final_tour_list)
     return new_state, removed_nodes
 
 
@@ -631,11 +630,10 @@ def display_solution_schedule(tour, arc_details, violated_nodes, indent="    "):
             # Get time window
             tw_start, tw_end = time_window_min_max_minute[to_node]
             
-            # Wait if early
+            # Check arrival time status
             arrival_time = current_time
             if current_time < tw_start:
                 status = "✗ EARLY"
-                current_time = tw_start # wait
             elif current_time > tw_end:
                 status = "✗ LATE"
             else:
@@ -643,14 +641,14 @@ def display_solution_schedule(tour, arc_details, violated_nodes, indent="    "):
             
             # Format
             arrival_str = format_time(arrival_time)
-            delivery_time_str = format_time(current_time)
             delivery_duration = delivery_time_minutes[to_node]
             tw_str = f"{format_time(tw_start)}-{format_time(tw_end)}"
             
-            lines.append(f"{indent}{from_node:>4} {to_node:>4} {distance_km:>7.2f} {speed_kmh:>7.1f} {load_kg:>8.1f} {co2_kg:>8.4f} {arrival_str:>9} {delivery_time_str:>9} {delivery_duration:>9} {tw_str:>18} {status:>10}")
-            
-            # Add delivery time
+            # Delivery happens immediately after arrival (no waiting)
             current_time += delivery_duration
+            delivery_time_str = format_time(current_time)
+            
+            lines.append(f"{indent}{from_node:>4} {to_node:>4} {distance_km:>7.2f} {speed_kmh:>7.1f} {load_kg:>8.1f} {co2_kg:>8.4f} {arrival_str:>9} {delivery_time_str:>9} {delivery_duration:>9} {tw_str:>18} {status:>10}")
     
     lines.append(f"{indent}" + "-"*130)
     return lines
