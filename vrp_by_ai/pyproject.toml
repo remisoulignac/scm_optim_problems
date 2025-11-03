@@ -1,0 +1,24 @@
+[project]
+name = "vrp-solver"
+version = "0.1.0"
+description = "CO2-Optimized Vehicle Routing Problem Solver using ALNS"
+authors = [
+    {name = "AI Developer", email = "dev@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=1.21.0",
+    "scipy>=1.7.0",
+    "alns>=5.0.0",
+]
+
+[project.scripts]
+vrp-solver = "vrp_solver:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []
